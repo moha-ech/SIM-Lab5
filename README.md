@@ -8,9 +8,12 @@ al núvol on es poden modificar paràmetres, executar escenaris i veure els
 resultats en temps real, tant en un **dashboard animat** com en un **Google
 Sheets**.
 
-> 🔗 **URL pública (Railway):** https://sim-service-production-b9f5.up.railway.app
+> 🔗 **Sim-service + dashboard (Railway):** https://sim-service-production-b9f5.up.railway.app
 > · [`/health`](https://sim-service-production-b9f5.up.railway.app/health)
 > · [`/scenarios`](https://sim-service-production-b9f5.up.railway.app/scenarios)
+>
+> 🔗 **Node-RED (Railway):** https://node-red-production-615a.up.railway.app
+> _(editor amb el flux del lot ja precarregat)_
 
 ---
 
@@ -109,9 +112,28 @@ pytest -q          # model (bunching emergeix, payload vàlid) + API
 
 - **Google Sheets**: desplega el Web App d'Apps Script i posa la seva URL a
   `GSHEET_WEBAPP_URL`. Vegeu [`apps_script/README.md`](apps_script/README.md).
-- **Node-RED**: importa [`node-red/flows.json`](node-red/flows.json) per executar
-  els 4 escenaris en lot i volcar-los a Sheets. Vegeu
-  [`node-red/README.md`](node-red/README.md).
+- **Node-RED**: ja desplegat a Railway com a **segon servei** (segona caixa de
+  l'arquitectura), amb el flux del lot **precarregat** —
+  https://node-red-production-615a.up.railway.app. Executa els 4 escenaris contra
+  el sim-service i els volca a Sheets. Vegeu [`node-red/README.md`](node-red/README.md).
+
+  **Automatització per flux** (equivalent flow-based als blocs de Snap! —
+  slide 44), però amb **HTTP/REST** en lloc de PubSub. El flux llegeix `SIM_URL`
+  i `SHEET_URL` de variables d'entorn del servei.
+
+  Passos que et queden:
+  1. Quan tinguis el Web App de Sheets, posa-li la URL al servei Node-RED:
+     ```bash
+     railway variables set SHEET_URL="https://script.google.com/macros/s/XXXX/exec" -s node-red
+     ```
+  2. Obre l'editor de Node-RED, prem el inject **▶ Executar lot** → 4 POST a
+     `/simulate` i 4 files a Google Sheets (visible al sidebar de debug).
+
+  > Sense `SHEET_URL`, el flux s'executa igualment i mostra les mètriques per
+  > debug (cv per escenari) sense desar a Sheets. Verificat en viu: base cv=0.53,
+  > finite cv=0.49 (774 rebutjats), variable cv=0.75, realistic cv=1.22.
+  > L'editor és **públic**; per protegir-lo, activa `adminAuth` a
+  > `node-red/settings.js` (instruccions al fitxer).
 
 ## 6. Desplegament a Railway
 
@@ -139,7 +161,10 @@ curl https://sim-service-production-b9f5.up.railway.app/health     # {"status":"
 curl https://sim-service-production-b9f5.up.railway.app/scenarios
 ```
 
-(Node-RED a Railway com a segon servei és opcional — vegeu `node-red/README.md`.)
+**Node-RED** ja està desplegat com a **segon servei** del mateix projecte Railway
+(imatge `nodered/node-red:4.0` via `node-red/Dockerfile`, amb el flux precarregat).
+Detalls i com es va configurar (Root Directory = `node-red`, `SIM_URL`/`SHEET_URL`):
+vegeu [`node-red/README.md`](node-red/README.md).
 
 ## 7. Per què Client-Server i no PubSub/MQTT (contrast — slide 25)
 

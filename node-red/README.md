@@ -2,35 +2,71 @@
 
 Flux que executa **els 4 escenaris** contra el sim-service i en volca les
 mètriques a Google Sheets. És la peça d'**automatització basada en flux**
-(equivalent block-based, però amb HTTP/REST en lloc de PubSub/MQTT).
+(equivalent flow-based als blocs de Snap! — slide 44, però amb HTTP/REST en lloc
+de PubSub/MQTT).
 
-> Node-RED és **secundari**: el core (sim-service + dashboard) funciona sol.
-> El botó "Desar a Google Sheets" del dashboard ja desa runs individuals; aquest
-> flux n'afegeix l'execució **en lot** dels presets.
+> ✅ **Desplegat i en viu:** https://node-red-production-615a.up.railway.app
+> El flux ja hi apareix **precarregat** (no cal importar res).
 
-## Importar el flux
+Pipeline del flux (per a cada escenari):
+`config + escenaris` → `POST {SIM_URL}/simulate` → `mètriques → query Sheets` →
+`GET {SHEET_URL}?op=append&...`.
 
-1. Obre Node-RED (local: `npx node-red`, després `http://localhost:1880`).
-2. Menú ☰ → **Importar** → enganxa [`flows.json`](./flows.json) → **Importar**.
-3. Obre el node de funció **`config + escenaris`** i edita:
-   - `SIM_URL` → domini públic de Railway (o `http://localhost:8000` en local).
-   - `SHEET_URL` → la URL `/exec` del Web App d'Apps Script.
-4. **Desplega** (botó superior dret).
-5. Clica el polsador del node **`▶ Executar lot`**.
+## Variables d'entorn
 
-El flux fa, per a cada escenari: `POST {SIM_URL}/simulate` → extreu mètriques →
-`GET {SHEET_URL}?op=append&...`. A la pestanya `Results` del full hi apareixen
-4 files noves (una per escenari).
+| Variable | Servei | Descripció |
+|----------|--------|------------|
+| `SIM_URL` | node-red | Domini del sim-service. Ja configurada al desplegament. |
+| `SHEET_URL`| node-red | URL `/exec` del Web App d'Apps Script. **La poses tu** quan el despleguis. |
 
-## Node-RED a Railway (opcional, segon servei)
-
-Desplega la imatge oficial com a segon servei del projecte:
+Si `SHEET_URL` és buida, el flux s'executa igualment i mostra les mètriques per
+debug (avís per escenari amb el `headway_cv`), però **no** desa a Sheets.
 
 ```bash
-railway add --service node-red --image nodered/node-red:latest
-railway variables set --service node-red TZ=Europe/Madrid
+railway variables set SHEET_URL="https://script.google.com/macros/s/XXXX/exec" -s node-red
 ```
 
-Després obre la URL pública de Node-RED, importa `flows.json` i posa a `SIM_URL`
-el domini **intern o públic** del sim-service. Si prefereixes simplicitat, executa
-Node-RED en local apuntant `SIM_URL` al domini públic de Railway.
+## Provar-ho (en viu)
+
+1. Obre l'editor: https://node-red-production-615a.up.railway.app
+2. Prem el polsador del node **▶ Executar lot**.
+3. Obre el sidebar de **debug** (icona d'escarabat): hi veuràs les 4 respostes,
+   una per escenari, amb el seu `headway_cv`.
+
+Verificat des de la CLI (sense `SHEET_URL`, només execució):
+`base cv=0.53 · finite cv=0.49 (774 rebutjats) · variable cv=0.75 · realistic cv=1.22`
+— coincideixen amb les mètriques del Digital Master.
+
+## Com es va desplegar a Railway (segon servei, via CLI)
+
+El sim-service i Node-RED **comparteixen el repo**, així que Node-RED es construeix
+des del subdirectori `node-red/` amb el seu `Dockerfile` (imatge oficial
+`nodered/node-red:4.0` + `flows.json` i `settings.js` precarregats a `/data`).
+
+```bash
+# 1) Crear el servei dins del projecte existent (el del sim-service)
+railway add --service node-red --variables "SIM_URL=https://sim-service-production-b9f5.up.railway.app"
+
+# 2) Root Directory = node-red  (perquè usi node-red/Dockerfile i el seu
+#    railway.json, i NO hereti el startCommand uvicorn del railway.json arrel).
+#    Es fa des de la UI de Railway: servei node-red → Settings → Source →
+#    Root Directory = "node-red"  (o per API, com es va fer aquí).
+
+# 3) Desplegar i generar domini
+railway up -s node-red
+railway domain -s node-red
+```
+
+Detalls tècnics rellevants (per si cal reproduir-ho):
+- `node-red/settings.js` força `uiPort = process.env.PORT` (Railway injecta `$PORT`)
+  i `uiHost = 0.0.0.0`.
+- `node-red/Dockerfile` desactiva el `HEALTHCHECK` de la imatge base (apunta al port
+  1880 fix) amb `HEALTHCHECK NONE`.
+- `node-red/railway.json` (config pròpia del servei, **sense** `startCommand`) evita
+  que Node-RED arrenqui amb el `uvicorn ...` del `railway.json` de l'arrel.
+
+## Editor públic (opcional: protegir-lo)
+
+L'editor és accessible públicament. Per posar-hi usuari/contrasenya, descomenta el
+bloc `adminAuth` de `node-red/settings.js`, genera un hash bcrypt
+(`npx node-red admin hash-pw`) i torna a desplegar.
