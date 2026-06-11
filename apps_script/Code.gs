@@ -1,22 +1,9 @@
 /**
  * SIM Lab5 — Digital Shadow (historial de runs a Google Sheets)
- *
- * Web App d'Apps Script que rep peticions HTTP (REST) del dashboard i de
- * Node-RED i afegeix una fila a la pestanya "Results" amb el timestamp,
- * tots els paràmetres i totes les mètriques d'una simulació.
- *
- * Operacions:
- *   ?op=append&num_buses=..&...&headway_cv=..     -> afegeix una fila
- *   ?op=append&data={"num_buses":..,...}          -> idem, amb JSON
- *   (sense op)                                     -> retorna estat (ping)
- *
- * Desplegament: Implementar > Nova implementació > Aplicació web,
- * "Executar com": jo mateix · "Qui hi té accés": Qualsevol.
  */
 
 var SHEET_NAME = 'Results';
 
-// Ordre de columnes (capçalera). Coincideix amb el que envia el dashboard/Node-RED.
 var HEADERS = [
   'timestamp',
   'num_buses', 'num_stops', 'capacity', 'sim_time', 'variable_demand', 'seed',
@@ -36,7 +23,6 @@ function handle(e) {
   try {
     var params = (e && e.parameter) ? e.parameter : {};
 
-    // Permet passar tot en un sol paràmetre JSON "data"
     if (params.data) {
       try {
         var parsed = JSON.parse(params.data);
@@ -69,10 +55,17 @@ function appendRow(params) {
   }
 
   var ts = new Date().toISOString();
+
+  // ▼▼▼ ÚNIC CANVI: escrivim números com a números (immune a la config regional) ▼▼▼
   var row = HEADERS.map(function (h) {
     if (h === 'timestamp') return ts;
-    return (params[h] !== undefined && params[h] !== '') ? params[h] : '';
+    var v = (params[h] !== undefined && params[h] !== '') ? params[h] : '';
+    if (h === 'variable_demand') return v;     // text/booleà, no tocar
+    var n = parseFloat(v);
+    return isNaN(n) ? v : n;                    // 0.486 es desa com 0.486, no 486
   });
+  // ▲▲▲ fi del canvi ▲▲▲
+
   sheet.appendRow(row);
   return sheet.getLastRow();
 }
