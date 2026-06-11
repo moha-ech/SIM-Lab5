@@ -8,7 +8,9 @@ al núvol on es poden modificar paràmetres, executar escenaris i veure els
 resultats en temps real, tant en un **dashboard animat** com en un **Google
 Sheets**.
 
-> 🔗 **URL pública (Railway):** _(s'omple després del desplegament — secció 6)_
+> 🔗 **URL pública (Railway):** https://sim-service-production-b9f5.up.railway.app
+> · [`/health`](https://sim-service-production-b9f5.up.railway.app/health)
+> · [`/scenarios`](https://sim-service-production-b9f5.up.railway.app/scenarios)
 
 ---
 
@@ -130,11 +132,11 @@ railway variables set GSHEET_WEBAPP_URL="https://script.google.com/macros/s/XXXX
 El `Procfile` / `railway.json` arrenquen `uvicorn app.main:app` al `$PORT` que
 injecta Railway (**no** es fa servir un port fix).
 
-Verificació contra el domini públic:
+Verificació contra el domini públic (desplegat i comprovat):
 
 ```bash
-curl https://EL-TEU-DOMINI.up.railway.app/health      # {"status":"ok"}
-curl https://EL-TEU-DOMINI.up.railway.app/scenarios
+curl https://sim-service-production-b9f5.up.railway.app/health     # {"status":"ok"}
+curl https://sim-service-production-b9f5.up.railway.app/scenarios
 ```
 
 (Node-RED a Railway com a segon servei és opcional — vegeu `node-red/README.md`.)
