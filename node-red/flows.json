@@ -1,0 +1,89 @@
+[
+  {
+    "id": "tab_lab5",
+    "type": "tab",
+    "label": "SIM Lab5 — batch escenaris",
+    "disabled": false,
+    "info": "Executa els 4 escenaris en lot contra el sim-service (POST /simulate)\ni volça les mètriques a Google Sheets (op=append).\n\nEDITA el node de funció 'config + escenaris': SIM_URL i SHEET_URL."
+  },
+  {
+    "id": "node_inject",
+    "type": "inject",
+    "z": "tab_lab5",
+    "name": "▶ Executar lot",
+    "props": [{ "p": "payload" }],
+    "repeat": "",
+    "once": false,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 140,
+    "y": 120,
+    "wires": [["node_scenarios"]]
+  },
+  {
+    "id": "node_scenarios",
+    "type": "function",
+    "z": "tab_lab5",
+    "name": "config + escenaris",
+    "func": "// ===== EDITA AQUESTES DUES URLS =====\nconst SIM_URL = \"http://localhost:8000\";   // domini públic de Railway en prod\nconst SHEET_URL = \"https://script.google.com/macros/s/XXXX/exec\";\n\nflow.set(\"SHEET_URL\", SHEET_URL);\n\nconst scenarios = [\n  { id: \"base\",      params: { num_buses: 2, num_stops: 3, capacity: 100000, variable_demand: false, sim_time: 480, seed: 42 } },\n  { id: \"finite\",    params: { num_buses: 2, num_stops: 3, capacity: 50,     variable_demand: false, sim_time: 480, seed: 42 } },\n  { id: \"variable\",  params: { num_buses: 2, num_stops: 3, capacity: 50,     variable_demand: true,  sim_time: 480, seed: 42 } },\n  { id: \"realistic\", params: { num_buses: 4, num_stops: 6, capacity: 50,     variable_demand: true,  sim_time: 480, seed: 42 } }\n];\n\nscenarios.forEach(function (s) {\n  node.send({\n    url: SIM_URL + \"/simulate\",\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    payload: s.params,\n    scenario: s.id,\n    simParams: s.params\n  });\n});\nreturn null;",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 340,
+    "y": 120,
+    "wires": [["node_post"]]
+  },
+  {
+    "id": "node_post",
+    "type": "http request",
+    "z": "tab_lab5",
+    "name": "POST /simulate",
+    "method": "use",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "persist": false,
+    "x": 560,
+    "y": 120,
+    "wires": [["node_extract"]]
+  },
+  {
+    "id": "node_extract",
+    "type": "function",
+    "z": "tab_lab5",
+    "name": "mètriques → query Sheets",
+    "func": "function qs(o) {\n  return Object.keys(o).map(function (k) {\n    return encodeURIComponent(k) + \"=\" + encodeURIComponent(o[k]);\n  }).join(\"&\");\n}\n\nconst m = msg.payload.metrics;\nconst p = msg.simParams;\n\nconst data = {\n  op: \"append\",\n  num_buses: p.num_buses, num_stops: p.num_stops, capacity: p.capacity,\n  sim_time: p.sim_time, variable_demand: p.variable_demand, seed: p.seed,\n  mean_wait: m.mean_wait, mean_headway: m.mean_headway, headway_cv: m.headway_cv,\n  total_rejected: m.total_rejected, max_queue: m.max_queue, mean_occupancy: m.mean_occupancy\n};\n\nmsg.url = flow.get(\"SHEET_URL\") + \"?\" + qs(data);\nmsg.method = \"GET\";\nmsg.headers = {};\nmsg.payload = \"\";\nnode.status({ fill: \"blue\", shape: \"dot\", text: msg.scenario + \" cv=\" + m.headway_cv });\nreturn msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "x": 800,
+    "y": 120,
+    "wires": [["node_sheet"]]
+  },
+  {
+    "id": "node_sheet",
+    "type": "http request",
+    "z": "tab_lab5",
+    "name": "GET Sheets append",
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "persist": false,
+    "x": 1030,
+    "y": 120,
+    "wires": [["node_debug"]]
+  },
+  {
+    "id": "node_debug",
+    "type": "debug",
+    "z": "tab_lab5",
+    "name": "resultat",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "complete": "payload",
+    "x": 1230,
+    "y": 120,
+    "wires": []
+  }
+]
