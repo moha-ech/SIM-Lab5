@@ -16,7 +16,7 @@ const state = {
   // animació
   frameIdx: 0,
   playing: false,
-  speed: 4,
+  speed: 2,
   lastTs: 0,
 };
 
@@ -340,8 +340,9 @@ function tick(ts) {
   if (!state.lastTs) state.lastTs = ts;
   const dt = (ts - state.lastTs) / 1000; // s reals
   state.lastTs = ts;
-  // reproducció: 'speed' frames de simulació per ~33ms -> escalat
-  const framesPerSec = state.speed * 30;
+  // reproducció: frames de simulació per segon real (dt en s).
+  // base 5 -> velocitat 1 = ~2.5 min de sim per segon real (8 h en ~3 min).
+  const framesPerSec = state.speed * 5;
   state.frameIdx += framesPerSec * dt;
   if (state.frameIdx >= state.data.frames.length - 1) {
     state.frameIdx = 0; // bucle
