@@ -4,7 +4,7 @@
     "type": "tab",
     "label": "SIM Lab5 — batch escenaris",
     "disabled": false,
-    "info": "Executa els 4 escenaris en lot contra el sim-service (POST /simulate)\ni volça les mètriques a Google Sheets (op=append).\n\nEDITA el node de funció 'config + escenaris': SIM_URL i SHEET_URL."
+    "info": "Executa els 4 escenaris en lot contra el sim-service (POST /simulate)\ni volça les mètriques a Google Sheets (op=append).\n\nURLs des de variables d'entorn: SIM_URL i SHEET_URL (railway variables set ...)."
   },
   {
     "id": "node_inject",
@@ -26,7 +26,7 @@
     "type": "function",
     "z": "tab_lab5",
     "name": "config + escenaris",
-    "func": "// ===== EDITA AQUESTES DUES URLS =====\nconst SIM_URL = \"http://localhost:8000\";   // domini públic de Railway en prod\nconst SHEET_URL = \"https://script.google.com/macros/s/XXXX/exec\";\n\nflow.set(\"SHEET_URL\", SHEET_URL);\n\nconst scenarios = [\n  { id: \"base\",      params: { num_buses: 2, num_stops: 3, capacity: 100000, variable_demand: false, sim_time: 480, seed: 42 } },\n  { id: \"finite\",    params: { num_buses: 2, num_stops: 3, capacity: 50,     variable_demand: false, sim_time: 480, seed: 42 } },\n  { id: \"variable\",  params: { num_buses: 2, num_stops: 3, capacity: 50,     variable_demand: true,  sim_time: 480, seed: 42 } },\n  { id: \"realistic\", params: { num_buses: 4, num_stops: 6, capacity: 50,     variable_demand: true,  sim_time: 480, seed: 42 } }\n];\n\nscenarios.forEach(function (s) {\n  node.send({\n    url: SIM_URL + \"/simulate\",\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    payload: s.params,\n    scenario: s.id,\n    simParams: s.params\n  });\n});\nreturn null;",
+    "func": "// URLs des de variables d'entorn (Railway), amb fallback al sim-service públic.\nconst SIM_URL = env.get(\"SIM_URL\") || \"https://sim-service-production-b9f5.up.railway.app\";\nconst SHEET_URL = env.get(\"SHEET_URL\") || \"\";\n\nflow.set(\"SHEET_URL\", SHEET_URL);\nif (!SHEET_URL) {\n  node.warn(\"SHEET_URL no configurada: s'executaran els escenaris pero NO es desaran a Google Sheets. Posa la variable SHEET_URL (URL .../exec del Web App).\");\n}\n\nconst scenarios = [\n  { id: \"base\",      params: { num_buses: 2, num_stops: 3, capacity: 100000, variable_demand: false, sim_time: 480, seed: 42 } },\n  { id: \"finite\",    params: { num_buses: 2, num_stops: 3, capacity: 50,     variable_demand: false, sim_time: 480, seed: 42 } },\n  { id: \"variable\",  params: { num_buses: 2, num_stops: 3, capacity: 50,     variable_demand: true,  sim_time: 480, seed: 42 } },\n  { id: \"realistic\", params: { num_buses: 4, num_stops: 6, capacity: 50,     variable_demand: true,  sim_time: 480, seed: 42 } }\n];\n\nscenarios.forEach(function (s) {\n  node.send({\n    url: SIM_URL + \"/simulate\",\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    payload: s.params,\n    scenario: s.id,\n    simParams: s.params\n  });\n});\nreturn null;",
     "outputs": 1,
     "noerr": 0,
     "x": 340,
@@ -52,7 +52,7 @@
     "type": "function",
     "z": "tab_lab5",
     "name": "mètriques → query Sheets",
-    "func": "function qs(o) {\n  return Object.keys(o).map(function (k) {\n    return encodeURIComponent(k) + \"=\" + encodeURIComponent(o[k]);\n  }).join(\"&\");\n}\n\nconst m = msg.payload.metrics;\nconst p = msg.simParams;\n\nconst data = {\n  op: \"append\",\n  num_buses: p.num_buses, num_stops: p.num_stops, capacity: p.capacity,\n  sim_time: p.sim_time, variable_demand: p.variable_demand, seed: p.seed,\n  mean_wait: m.mean_wait, mean_headway: m.mean_headway, headway_cv: m.headway_cv,\n  total_rejected: m.total_rejected, max_queue: m.max_queue, mean_occupancy: m.mean_occupancy\n};\n\nmsg.url = flow.get(\"SHEET_URL\") + \"?\" + qs(data);\nmsg.method = \"GET\";\nmsg.headers = {};\nmsg.payload = \"\";\nnode.status({ fill: \"blue\", shape: \"dot\", text: msg.scenario + \" cv=\" + m.headway_cv });\nreturn msg;",
+    "func": "function qs(o) {\n  return Object.keys(o).map(function (k) {\n    return encodeURIComponent(k) + \"=\" + encodeURIComponent(o[k]);\n  }).join(\"&\");\n}\n\nconst m = msg.payload.metrics;\nconst p = msg.simParams;\nnode.status({ fill: \"blue\", shape: \"dot\", text: msg.scenario + \" cv=\" + m.headway_cv });\n\nconst SHEET_URL = flow.get(\"SHEET_URL\");\nif (!SHEET_URL) {\n  // Sense Sheets configurat: mostrem el resultat per debug i no enviem res.\n  node.warn(msg.scenario + \": cv=\" + m.headway_cv + \" rejected=\" + m.total_rejected + \" (SHEET_URL buida, no es desa)\");\n  return null;\n}\n\nconst data = {\n  op: \"append\",\n  num_buses: p.num_buses, num_stops: p.num_stops, capacity: p.capacity,\n  sim_time: p.sim_time, variable_demand: p.variable_demand, seed: p.seed,\n  mean_wait: m.mean_wait, mean_headway: m.mean_headway, headway_cv: m.headway_cv,\n  total_rejected: m.total_rejected, max_queue: m.max_queue, mean_occupancy: m.mean_occupancy\n};\n\nmsg.url = SHEET_URL + \"?\" + qs(data);\nmsg.method = \"GET\";\nmsg.headers = {};\nmsg.payload = \"\";\nreturn msg;",
     "outputs": 1,
     "noerr": 0,
     "x": 800,
